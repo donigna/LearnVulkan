@@ -4,6 +4,27 @@
 #pragma once
 
 #include <vk_types.h>
+#include <vk_descriptors.h>
+
+struct DeletionQueue
+{
+	std::deque<std::function<void()>> deletors;
+
+	void push_function(std::function<void()> &&function)
+	{
+		deletors.push_back(function);
+	}
+
+	void flush()
+	{
+		for (auto it = deletors.rbegin(); it != deletors.rend(); it++)
+		{
+			(*it)();
+		}
+
+		deletors.clear();
+	}
+};
 
 struct FrameData
 {
@@ -11,13 +32,32 @@ struct FrameData
 	VkCommandBuffer _mainCommandBuffer;
 	VkSemaphore _swapchainSemaphore, _renderSemaphore;
 	VkFence _renderFence;
+	DeletionQueue _deletionQueue;
+};
+
+struct ComputePushConstants
+{
+	glm::vec4 data1;
+	glm::vec4 data2;
+	glm::vec4 data3;
+	glm::vec4 data4;
+};
+
+struct ComputeEffect
+{
+	const char *name;
+
+	VkPipeline pipeline;
+	VkPipelineLayout layout;
+
+	ComputePushConstants data;
 };
 
 constexpr unsigned int FRAME_OVERLAP = 2;
 
-class VulkanEngine {
+class VulkanEngine
+{
 public:
-
 	VkInstance _instance;
 	VkDebugUtilsMessengerEXT _debug_messenger;
 	VkPhysicalDevice _chosenGPU;
@@ -27,19 +67,19 @@ public:
 	VkSwapchainKHR _swapchain;
 	VkFormat _swapchainImageFormat;
 
-	bool _isInitialized{ false };
-	int _frameNumber {0};
-	bool stop_rendering{ false };
-	VkExtent2D _windowExtent{ 1700 , 900 };
+	bool _isInitialized{false};
+	int _frameNumber{0};
+	bool stop_rendering{false};
+	VkExtent2D _windowExtent{1700, 900};
 	std::vector<VkImage> _swapchainImages;
 	std::vector<VkImageView> _swapchainImageViews;
 	VkExtent2D _swapchainExtent;
 
-	struct SDL_Window* _window{ nullptr };
+	struct SDL_Window *_window{nullptr};
 
 	FrameData _frames[FRAME_OVERLAP];
 
-	FrameData& get_current_frame()
+	FrameData &get_current_frame()
 	{
 		return _frames[_frameNumber % FRAME_OVERLAP];
 	}
@@ -47,23 +87,51 @@ public:
 	VkQueue _graphicsQueue;
 	uint32_t _graphicsQueueFamily;
 
-	static VulkanEngine& Get();
+	DeletionQueue _mainDeletionQueue;
 
-	//initializes everything in the engine
+	VmaAllocator _allocator;
+
+	// draw resource
+	AllocatedImage _drawImage;
+	VkExtent2D _drawExtent;
+
+	DescriptorAllocator globalDescriptorAllocator;
+
+	VkDescriptorSet _drawImageDescriptors;
+	VkDescriptorSetLayout _drawImageDescriptorLayout;
+
+	VkPipeline _gradientPipeline;
+	VkPipelineLayout _gradientPipelineLayout;
+
+	// immediate submit structures
+	VkFence _immFence;
+	VkCommandBuffer _immCommandBuffer;
+	VkCommandPool _immCommandPool;
+
+	void immediate_submit(std::function<void(VkCommandBuffer cmd)> &&function);
+
+	std::vector<ComputeEffect> backgroundEffects;
+	int currentBackgroundEffect{0};
+
+	static VulkanEngine &Get();
+
+	// initializes everything in the engine
 	void init();
 
-	//shuts down the engine
+	// shuts down the engine
 	void cleanup();
 
-	//draw loop
+	// draw loop
 	void draw();
 
-	//run main loop
+	void draw_background(VkCommandBuffer cmd);
+
+	void draw_imgui(VkCommandBuffer cmd, VkImageView targetImageView);
+
+	// run main loop
 	void run();
 
-
 private:
-
 	void init_vulkan();
 	void init_swapchain();
 	void init_commands();
@@ -71,4 +139,11 @@ private:
 
 	void create_swapchain(uint32_t width, uint32_t height);
 	void destroy_swapchain();
+
+	void init_descriptor();
+
+	void init_pipelines();
+	void init_background_pipelines();
+
+	void init_imgui();
 };
