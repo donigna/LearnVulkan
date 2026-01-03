@@ -1,4 +1,7 @@
 /build
 /bin
 /assets/brickadia
-/.idea
+.idea
+.vs
+.vscode
+/out

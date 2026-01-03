@@ -1,5 +1,5 @@
 //GLSL version to use
-#version 460
+#version 450
 
 //size of a workgroup for compute
 layout(local_size_x = 16, local_size_y = 16) in;
